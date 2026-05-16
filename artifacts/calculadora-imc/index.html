@@ -361,6 +361,33 @@
         return;
       }
 
+      // --- Explicação matemática ---
+      // Entrada: peso em quilogramas (kg), altura em centímetros (cm).
+      // Primeiro convertemos a altura de centímetros para metros, pois a
+      // fórmula do IMC (Índice de Massa Corporal, ou BMI em inglês)
+      // utiliza metros:
+      //
+      //   altura_m = altura_cm / 100
+      //
+      // Fórmula do IMC:
+      //   IMC = peso / (altura_m * altura_m)
+      //
+      // Isto é equivalente a:
+      //   IMC = peso / (altura_m^2)
+      //
+      // Onde:
+      // - peso está em kg,
+      // - altura_m está em metros,
+      // - resultado IMC é dado em kg/m².
+      //
+      // Exemplos:
+      // - peso = 70 kg, altura = 170 cm -> altura_m = 1.70 m
+      //   IMC = 70 / (1.7 * 1.7) ≈ 24.22
+      //
+      // O cálculo usa divisão e multiplicação simples; a unidade final é
+      // kg/m², que é a convenção para classificação de faixa de peso.
+      // --- fim da explicação ---
+
       var alturaM = alturaCm / 100;
       var imc = peso / (alturaM * alturaM);
 

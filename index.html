@@ -334,125 +334,215 @@
         <div class="scale-text">Obeso II+<br>&ge;35</div>
       </div>
     </div>
+
+    <!-- Histórico salvo no Local Storage -->
+   <div style="margin-top:18px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <div style="color:rgba(255,255,255,0.7); font-weight:600;">Histórico</div>
+      <button class="btn btn-reset" id="clear-history-btn" style="padding:8px 12px; font-size:0.8rem;">Limpar histórico</button>
+    </div>
+    <div id="history" style="max-height:180px; overflow:auto; padding:8px; border-radius:12px; background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.03);"></div>
   </div>
-
-  <script>
+   </div>
+ 
+   <script>
+    const HISTORY_KEY = 'imcHistory';
+ 
     function calcular() {
-      var peso = parseFloat(document.getElementById('weight').value);
-      var alturaCm = parseFloat(document.getElementById('height').value);
-      var errorEl = document.getElementById('error');
-      var resultEl = document.getElementById('result');
-
-      errorEl.classList.remove('visible');
-      resultEl.classList.remove('visible');
-      resultEl.className = 'result';
-      limparScale();
-
-      if (isNaN(peso) || isNaN(alturaCm)) {
-        mostrarErro('Preencha o peso e a altura para calcular.');
-        return;
+       var peso = parseFloat(document.getElementById('weight').value);
+       var alturaCm = parseFloat(document.getElementById('height').value);
+       var errorEl = document.getElementById('error');
+       var resultEl = document.getElementById('result');
+ 
+       errorEl.classList.remove('visible');
+       resultEl.classList.remove('visible');
+       resultEl.className = 'result';
+       limparScale();
+ 
+       if (isNaN(peso) || isNaN(alturaCm)) {
+         mostrarErro('Preencha o peso e a altura para calcular.');
+         return;
+       }
+       if (peso <= 0 || peso > 500) {
+         mostrarErro('Insira um peso valido entre 1 e 500 kg.');
+         return;
+       }
+       if (alturaCm <= 0 || alturaCm > 300) {
+         mostrarErro('Insira uma altura valida entre 1 e 300 cm.');
+         return;
+       }
+ 
+       // --- Explicação matemática ---
+       // Entrada: peso em quilogramas (kg), altura em centímetros (cm).
+       // Primeiro convertemos a altura de centímetros para metros, pois a
+       // fórmula do IMC (Índice de Massa Corporal, ou BMI em inglês)
+       // utiliza metros:
+       //
+       //   altura_m = altura_cm / 100
+       //
+       // Fórmula do IMC:
+       //   IMC = peso / (altura_m * altura_m)
+       //
+       // Isto é equivalente a:
+       //   IMC = peso / (altura_m^2)
+       //
+       // Onde:
+       // - peso está em kg,
+       // - altura_m está em metros,
+       // - resultado IMC é dado em kg/m².
+       //
+       // Exemplos:
+       // - peso = 70 kg, altura = 170 cm -> altura_m = 1.70 m
+       //   IMC = 70 / (1.7 * 1.7) ≈ 24.22
+       //
+       // O cálculo usa divisão e multiplicação simples; a unidade final é
+       // kg/m², que é a convenção para classificação de faixa de peso.
+       // --- fim da explicação ---
+ 
+       var alturaM = alturaCm / 100;
+       var imc = peso / (alturaM * alturaM);
+ 
+       var categoria, dica, cssClass, scaleId;
+ 
+       if (imc < 18.5) {
+         categoria = 'Abaixo do Peso';
+         dica = 'Considere consultar um nutricionista para avaliar sua alimentacao.';
+         cssClass = 'category-underweight';
+         scaleId = 's1';
+       } else if (imc < 25) {
+         categoria = 'Peso Normal';
+         dica = 'Otimo! Continue mantendo habitos saudaveis de alimentacao e exercicio.';
+         cssClass = 'category-normal';
+         scaleId = 's2';
+       } else if (imc < 30) {
+         categoria = 'Sobrepeso';
+         dica = 'Pequenos ajustes na dieta e exercicios regulares podem fazer grande diferenca.';
+         cssClass = 'category-overweight';
+         scaleId = 's3';
+       } else if (imc < 35) {
+         categoria = 'Obesidade Grau I';
+         dica = 'Recomenda-se acompanhamento medico e nutricional para orientacao adequada.';
+         cssClass = 'category-obese1';
+         scaleId = 's4';
+       } else {
+         categoria = 'Obesidade Grau II ou maior';
+         dica = 'Procure orientacao medica especializada para um plano de saude personalizado.';
+         cssClass = 'category-obese2';
+         scaleId = 's5';
+       }
+ 
+       document.getElementById('imc-value').textContent = imc.toFixed(1);
+       document.getElementById('imc-category').textContent = categoria;
+       document.getElementById('imc-tip').textContent = dica;
+ 
+       resultEl.className = 'result visible ' + cssClass;
+       document.getElementById(scaleId).classList.add('active');
+ 
+      // Salva resultado no localStorage
+      const entry = {
+        ts: new Date().toISOString(),
+        peso: Number(peso.toFixed(1)),
+        alturaCm: Number(alturaCm),
+        imc: Number(imc.toFixed(1)),
+        categoria: categoria
+      };
+      saveHistory(entry);
+      renderHistory();
+     }
+ 
+     function mostrarErro(msg) {
+       var errorEl = document.getElementById('error');
+       errorEl.textContent = msg;
+       errorEl.classList.add('visible');
+     }
+ 
+     function limparScale() {
+       ['s1','s2','s3','s4','s5'].forEach(function(id) {
+         document.getElementById(id).classList.remove('active');
+       });
+     }
+ 
+     function resetar() {
+       document.getElementById('weight').value = '';
+       document.getElementById('height').value = '';
+       document.getElementById('error').classList.remove('visible');
+       var resultEl = document.getElementById('result');
+       resultEl.className = 'result';
+       limparScale();
+     }
+ 
+    // --- Funções de histórico usando localStorage ---
+    function loadHistory() {
+      try {
+        const raw = localStorage.getItem(HISTORY_KEY);
+        if (!raw) return [];
+        return JSON.parse(raw);
+      } catch (e) {
+        console.error('Erro ao ler histórico:', e);
+        return [];
       }
-      if (peso <= 0 || peso > 500) {
-        mostrarErro('Insira um peso valido entre 1 e 500 kg.');
-        return;
-      }
-      if (alturaCm <= 0 || alturaCm > 300) {
-        mostrarErro('Insira uma altura valida entre 1 e 300 cm.');
-        return;
-      }
-
-      // --- Explicação matemática ---
-      // Entrada: peso em quilogramas (kg), altura em centímetros (cm).
-      // Primeiro convertemos a altura de centímetros para metros, pois a
-      // fórmula do IMC (Índice de Massa Corporal, ou BMI em inglês)
-      // utiliza metros:
-      //
-      //   altura_m = altura_cm / 100
-      //
-      // Fórmula do IMC:
-      //   IMC = peso / (altura_m * altura_m)
-      //
-      // Isto é equivalente a:
-      //   IMC = peso / (altura_m^2)
-      //
-      // Onde:
-      // - peso está em kg,
-      // - altura_m está em metros,
-      // - resultado IMC é dado em kg/m².
-      //
-      // Exemplos:
-      // - peso = 70 kg, altura = 170 cm -> altura_m = 1.70 m
-      //   IMC = 70 / (1.7 * 1.7) ≈ 24.22
-      //
-      // O cálculo usa divisão e multiplicação simples; a unidade final é
-      // kg/m², que é a convenção para classificação de faixa de peso.
-      // --- fim da explicação ---
-
-      var alturaM = alturaCm / 100;
-      var imc = peso / (alturaM * alturaM);
-
-      var categoria, dica, cssClass, scaleId;
-
-      if (imc < 18.5) {
-        categoria = 'Abaixo do Peso';
-        dica = 'Considere consultar um nutricionista para avaliar sua alimentacao.';
-        cssClass = 'category-underweight';
-        scaleId = 's1';
-      } else if (imc < 25) {
-        categoria = 'Peso Normal';
-        dica = 'Otimo! Continue mantendo habitos saudaveis de alimentacao e exercicio.';
-        cssClass = 'category-normal';
-        scaleId = 's2';
-      } else if (imc < 30) {
-        categoria = 'Sobrepeso';
-        dica = 'Pequenos ajustes na dieta e exercicios regulares podem fazer grande diferenca.';
-        cssClass = 'category-overweight';
-        scaleId = 's3';
-      } else if (imc < 35) {
-        categoria = 'Obesidade Grau I';
-        dica = 'Recomenda-se acompanhamento medico e nutricional para orientacao adequada.';
-        cssClass = 'category-obese1';
-        scaleId = 's4';
-      } else {
-        categoria = 'Obesidade Grau II ou maior';
-        dica = 'Procure orientacao medica especializada para um plano de saude personalizado.';
-        cssClass = 'category-obese2';
-        scaleId = 's5';
-      }
-
-      document.getElementById('imc-value').textContent = imc.toFixed(1);
-      document.getElementById('imc-category').textContent = categoria;
-      document.getElementById('imc-tip').textContent = dica;
-
-      resultEl.className = 'result visible ' + cssClass;
-      document.getElementById(scaleId).classList.add('active');
     }
-
-    function mostrarErro(msg) {
-      var errorEl = document.getElementById('error');
-      errorEl.textContent = msg;
-      errorEl.classList.add('visible');
+ 
+    function saveHistory(entry) {
+      const list = loadHistory();
+      list.unshift(entry); // mais recente primeiro
+      const max = 10;
+      if (list.length > max) list.length = max;
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
     }
-
-    function limparScale() {
-      ['s1','s2','s3','s4','s5'].forEach(function(id) {
-        document.getElementById(id).classList.remove('active');
+ 
+    function clearHistory() {
+      localStorage.removeItem(HISTORY_KEY);
+      renderHistory();
+    }
+ 
+    function renderHistory() {
+      const container = document.getElementById('history');
+      const list = loadHistory();
+      if (!container) return;
+      if (list.length === 0) {
+        container.innerHTML = '<div style="color:rgba(255,255,255,0.45); font-size:0.9rem;">Nenhum resultado salvo.</div>';
+        return;
+      }
+      container.innerHTML = list.map((it, idx) => {
+        const dt = new Date(it.ts);
+        const when = dt.toLocaleString();
+        return `<div style="padding:8px 10px; border-radius:8px; margin-bottom:6px; background: rgba(255,255,255,0.02); display:flex; justify-content:space-between; align-items:center;">
+                  <div style="font-size:0.85rem; color:rgba(255,255,255,0.85);">
+                    <div style="font-weight:600;">${it.imc} kg/m² — ${it.categoria}</div>
+                    <div style="font-size:0.75rem; color:rgba(255,255,255,0.5);">Peso: ${it.peso} kg • Altura: ${it.alturaCm} cm • ${when}</div>
+                  </div>
+                  <div style="display:flex; gap:6px; margin-left:12px;">
+                    <button data-idx="${idx}" class="btn btn-reset" style="padding:6px 8px; font-size:0.75rem;">Aplicar</button>
+                  </div>
+                </div>`;
+      }).join('');
+ 
+      // adiciona handlers para aplicar itens do histórico
+      container.querySelectorAll('button[data-idx]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          const idx = Number(btn.getAttribute('data-idx'));
+          const item = loadHistory()[idx];
+          if (!item) return;
+          document.getElementById('weight').value = item.peso;
+          document.getElementById('height').value = item.alturaCm;
+          calcular();
+        });
       });
     }
-
-    function resetar() {
-      document.getElementById('weight').value = '';
-      document.getElementById('height').value = '';
-      document.getElementById('error').classList.remove('visible');
-      var resultEl = document.getElementById('result');
-      resultEl.className = 'result';
-      limparScale();
-    }
-
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') calcular();
+    // --- fim histórico ---
+ 
+     document.addEventListener('keydown', function(e) {
+       if (e.key === 'Enter') calcular();
+     });
+ 
+    // Inicializa histórico e botão limpar
+    document.addEventListener('DOMContentLoaded', function() {
+      renderHistory();
+      const clearBtn = document.getElementById('clear-history-btn');
+      if (clearBtn) clearBtn.addEventListener('click', clearHistory);
     });
-  </script>
-
-</body>
-</html>
+   </script>
+ 
+ </body>
+ </html>

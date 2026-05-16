@@ -287,7 +287,8 @@
     <div class="field">
       <label for="weight">Peso</label>
       <div class="input-wrapper">
-        <input type="number" id="weight" placeholder="Ex: 70" min="1" max="500" step="0.1" />
+        <!-- min/max/step removidos para não impor limites -->
+        <input type="number" id="weight" placeholder="Ex: 70" />
         <span class="unit">kg</span>
       </div>
     </div>
@@ -295,7 +296,8 @@
     <div class="field">
       <label for="height">Altura</label>
       <div class="input-wrapper">
-        <input type="number" id="height" placeholder="Ex: 170" min="1" max="300" step="1" />
+        <!-- min/max/step removidos para não impor limites -->
+        <input type="number" id="height" placeholder="Ex: 170" />
         <span class="unit">cm</span>
       </div>
     </div>
@@ -359,52 +361,36 @@
        resultEl.className = 'result';
        limparScale();
  
+       // Mantém apenas checagem básica: valores numéricos.
        if (isNaN(peso) || isNaN(alturaCm)) {
          mostrarErro('Preencha o peso e a altura para calcular.');
          return;
        }
-       if (peso <= 0 || peso > 500) {
-         mostrarErro('Insira um peso valido entre 1 e 500 kg.');
-         return;
-       }
-       if (alturaCm <= 0 || alturaCm > 300) {
-         mostrarErro('Insira uma altura valida entre 1 e 300 cm.');
-         return;
-       }
- 
+       // OBS: não há mais limites de mínimo/máximo; entradas arbitrárias são permitidas.
+
        // --- Explicação matemática ---
        // Entrada: peso em quilogramas (kg), altura em centímetros (cm).
-       // Primeiro convertemos a altura de centímetros para metros, pois a
-       // fórmula do IMC (Índice de Massa Corporal, ou BMI em inglês)
-       // utiliza metros:
-       //
+       // Primeiro convertemos a altura de centímetros para metros:
        //   altura_m = altura_cm / 100
-       //
        // Fórmula do IMC:
        //   IMC = peso / (altura_m * altura_m)
-       //
-       // Isto é equivalente a:
-       //   IMC = peso / (altura_m^2)
-       //
-       // Onde:
-       // - peso está em kg,
-       // - altura_m está em metros,
-       // - resultado IMC é dado em kg/m².
-       //
-       // Exemplos:
-       // - peso = 70 kg, altura = 170 cm -> altura_m = 1.70 m
-       //   IMC = 70 / (1.7 * 1.7) ≈ 24.22
-       //
-       // O cálculo usa divisão e multiplicação simples; a unidade final é
-       // kg/m², que é a convenção para classificação de faixa de peso.
        // --- fim da explicação ---
- 
+
        var alturaM = alturaCm / 100;
        var imc = peso / (alturaM * alturaM);
- 
+
+       // Se resultado não for finito (ex.: divisão por zero), apresentamos "∞" e uma categoria indeterminada.
+       const imcIsFinite = isFinite(imc) && !isNaN(imc);
+       const imcDisplay = imcIsFinite ? imc.toFixed(1) : '∞';
+
        var categoria, dica, cssClass, scaleId;
- 
-       if (imc < 18.5) {
+
+       if (!imcIsFinite) {
+         categoria = 'Indeterminado';
+         dica = 'IMC indefinido para altura zero ou valores não finitos.';
+         cssClass = '';
+         scaleId = null;
+       } else if (imc < 18.5) {
          categoria = 'Abaixo do Peso';
          dica = 'Considere consultar um nutricionista para avaliar sua alimentacao.';
          cssClass = 'category-underweight';
@@ -431,19 +417,20 @@
          scaleId = 's5';
        }
  
-       document.getElementById('imc-value').textContent = imc.toFixed(1);
+       document.getElementById('imc-value').textContent = imcDisplay;
        document.getElementById('imc-category').textContent = categoria;
        document.getElementById('imc-tip').textContent = dica;
  
        resultEl.className = 'result visible ' + cssClass;
-       document.getElementById(scaleId).classList.add('active');
+       if (scaleId) document.getElementById(scaleId).classList.add('active');
  
-      // Salva resultado no localStorage
+      // Salva resultado no localStorage (imcDisplay usado para preservar "∞")
       const entry = {
         ts: new Date().toISOString(),
-        peso: Number(peso.toFixed(1)),
+        peso: Number(peso),        // sem arredondamento forçando limites
         alturaCm: Number(alturaCm),
-        imc: Number(imc.toFixed(1)),
+        imc: imcIsFinite ? Number(imc.toFixed(1)) : null,
+        imcDisplay: imcDisplay,
         categoria: categoria
       };
       saveHistory(entry);
@@ -507,9 +494,10 @@
       container.innerHTML = list.map((it, idx) => {
         const dt = new Date(it.ts);
         const when = dt.toLocaleString();
+        const imcText = (it.imcDisplay !== undefined) ? it.imcDisplay : (it.imc !== null ? String(it.imc) : '—');
         return `<div style="padding:8px 10px; border-radius:8px; margin-bottom:6px; background: rgba(255,255,255,0.02); display:flex; justify-content:space-between; align-items:center;">
                   <div style="font-size:0.85rem; color:rgba(255,255,255,0.85);">
-                    <div style="font-weight:600;">${it.imc} kg/m² — ${it.categoria}</div>
+                    <div style="font-weight:600;">${imcText} kg/m² — ${it.categoria}</div>
                     <div style="font-size:0.75rem; color:rgba(255,255,255,0.5);">Peso: ${it.peso} kg • Altura: ${it.alturaCm} cm • ${when}</div>
                   </div>
                   <div style="display:flex; gap:6px; margin-left:12px;">
